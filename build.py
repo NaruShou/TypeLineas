@@ -19,7 +19,7 @@ MODULE_ORDER = [
     'src/__main__.py',
 ]
 
-# 需要保留的标准库 import（放在文件头部）
+# 需要保留的标准库 import
 STDLIB_IMPORTS = """import os
 import re
 import sys
@@ -38,7 +38,7 @@ INTERNAL_IMPORT_PATTERN = re.compile(
     re.MULTILINE
 )
 
-# 匹配标准库 import（用于移除，因为统一放在头部）
+# 匹配标准库 import
 STDLIB_PATTERN = re.compile(r'^(import (os|re|sys|ast|csv|locale|unicodedata)|from collections import).*$', re.MULTILINE)
 
 
@@ -52,7 +52,7 @@ def strip_imports(content):
     """移除内部和标准库 import 语句"""
     # 移除 src 内部 import
     content = INTERNAL_IMPORT_PATTERN.sub('', content)
-    # 移除标准库 import（后面统一添加）
+    # 移除标准库 import
     content = STDLIB_PATTERN.sub('', content)
     return content
 

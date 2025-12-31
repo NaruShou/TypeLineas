@@ -21,7 +21,7 @@ def sanitize_line(line, lang_name):
         clean_line = line 
     
     # 各语言的行内注释符映射
-    # 注意：PHP 同时支持 // 和 #，所以优先处理 //
+    # PHP 同时支持 // 和 #，优先处理 //
     inline_comment_markers = {
         'Python': '#',
         'Ruby': '#',

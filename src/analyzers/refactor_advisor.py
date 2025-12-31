@@ -26,7 +26,8 @@ THRESHOLDS = {
 CODE_SMELLS = {
     # (pattern, name, suggestion)
     'god_function': {
-        'pattern': re.compile(r'^(def|function|func)\s+\w+.*?(?=^(def|function|func|class)|\Z)', re.MULTILINE | re.DOTALL),
+        'pattern': None,
+        'skip': True,
         'name': 'God Function',
         'check': 'line_count',
         'threshold': 50,
@@ -257,11 +258,53 @@ def analyze_function_complexity(file_path, lang_name):
                 else:
                     end_line = min(start_line + 100, len(lines))
             else:
-                # 大括号语言：找匹配的 }
+                # 大括号语言：用大括号状态机精确定位函数结束位置
+                # 设置扫描上界来平衡精度和性能
                 if i + 1 < len(func_matches):
-                    end_line = content[:func_matches[i+1].start()].count('\n')
+                    # 用下一个函数的位置作为扫描天花板
+                    scan_end = func_matches[i + 1].start()
                 else:
-                    end_line = len(lines)
+                    scan_end = len(content)
+                
+                brace_count = 0
+                in_string = False
+                string_char = None
+                escaped = False
+                end_line = content[:scan_end].count('\n') + 1  # 默认用扫描上界
+                
+                for char_idx in range(match.start(), scan_end):
+                    char = content[char_idx]
+                    
+                    # 处理转义字符
+                    if escaped:
+                        escaped = False
+                        continue
+                    if char == '\\':
+                        escaped = True
+                        continue
+                    
+                    # 处理字符串（跳过字符串内的大括号）
+                    if char in '"\'':
+                        if not in_string:
+                            in_string = True
+                            string_char = char
+                        elif char == string_char:
+                            in_string = False
+                            string_char = None
+                        continue
+                    
+                    if in_string:
+                        continue
+                    
+                    # 追踪大括号状态
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            # 找到函数结束位置
+                            end_line = content[:char_idx + 1].count('\n') + 1
+                            break
             
             func_len = end_line - start_line
             func_body = '\n'.join(lines[start_line-1:end_line])
@@ -326,6 +369,9 @@ def scan_code_smells(file_path):
     
     # 检测各种代码异味
     for smell_key, smell_info in CODE_SMELLS.items():
+        # 跳过标记了 skip 的项或没有 pattern 的项
+        if smell_info.get('skip') or not smell_info.get('pattern'):
+            continue
         pattern = smell_info['pattern']
         matches = list(pattern.finditer(content))
         
@@ -356,7 +402,7 @@ def scan_code_smells(file_path):
             'suggestion': '拆分或格式化',
         })
     
-    # 检测函数长度（简化检测）
+    # 检测函数长度
     func_pattern = re.compile(r'^(    )*def\s+(\w+)\s*\(', re.MULTILINE)
     func_matches = list(func_pattern.finditer(content))
     long_funcs = []

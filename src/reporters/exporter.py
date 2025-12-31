@@ -42,7 +42,7 @@ def export_report(all_stats, filename, root_dir, include_advice=False):
     """导出分析报告到 CSV 或 Markdown 格式"""
     try:
         if filename.endswith('.csv'):
-            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            with open(filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
                 fieldnames = [t('file_path'), t('language'), t('shit_score'), t('coder_score'), 
                               t('complexity'), 'Type', t('lines'), t('code'), t('comments'), t('imports')]
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -83,7 +83,7 @@ def export_report(all_stats, filename, root_dir, include_advice=False):
                     str(s['imports'])
                 ])
 
-            # 计算每列宽度（考虑中文）
+            # 计算每列宽度
             widths = [str_width(h) for h in headers]
             for row in rows:
                 for i, val in enumerate(row):

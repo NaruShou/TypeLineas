@@ -20,7 +20,7 @@ from src.reporters.exporter import export_report
 
 
 def str_width(s):
-    """计算字符串显示宽度（中文占2格）"""
+    """计算字符串显示宽度"""
     width = 0
     for char in str(s):
         if unicodedata.east_asian_width(char) in ('F', 'W'):
@@ -103,7 +103,7 @@ def main():
     # 表格列宽定义
     col_widths = [12, 8, 10, 10, 10, 10, 8]
     print("-" * 80)
-    # 表头本地化（考虑中文宽度）
+    # 表头本地化
     headers = [t('language'), t('files'), t('lines'), t('code'), t('comments'), t('coupling'), t('avg_cc')]
     header_row = ' '.join(pad_cjk(h, w) for h, w in zip(headers, col_widths))
     print(header_row)
