@@ -74,10 +74,14 @@ def clean_content(content):
     return content.strip()
 
 
-def minify_code(code):
+def minify_code(code, aggressive=False):
     """
     使用 python-minifier 压缩代码
     构建时依赖，不影响分发文件
+    
+    Args:
+        code: 源代码
+        aggressive: 激进模式，开启全局重命名和字面量提升
     """
     try:
         import python_minifier
@@ -85,11 +89,11 @@ def minify_code(code):
             code,
             remove_annotations=True,
             remove_pass=True,
-            remove_literal_statements=True,  # 移除独立的字符串（docstring）
+            remove_literal_statements=True,
             combine_imports=True,
-            hoist_literals=False,  # 不提升字面量，保持可读性
+            hoist_literals=aggressive,      # 激进模式：提升重复字面量为变量
             rename_locals=True,
-            rename_globals=False,  # 保留全局名称以便调试
+            rename_globals=aggressive,      # 激进模式：混淆全局名称
             remove_object_base=True,
             convert_posargs_to_args=True,
         )
@@ -99,7 +103,7 @@ def minify_code(code):
         return code
 
 
-def build(minify=True):
+def build(minify=True, aggressive=False):
     """执行构建"""
     project_root = Path(__file__).parent
     dist_dir = project_root / 'dist'
@@ -108,7 +112,8 @@ def build(minify=True):
     
     print("Building TypeLineas...")
     if minify:
-        print("  [INFO] 压缩模式已启用")
+        mode = "激进压缩" if aggressive else "标准压缩"
+        print(f"  [INFO] {mode}模式已启用")
     
     parts = [STDLIB_IMPORTS]
     
@@ -142,7 +147,7 @@ def build(minify=True):
     # 压缩代码
     if minify:
         print("  Minifying...")
-        final_content = minify_code(final_content)
+        final_content = minify_code(final_content, aggressive=aggressive)
     
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(final_content)
@@ -160,9 +165,11 @@ def build(minify=True):
 def main():
     parser = argparse.ArgumentParser(description='TypeLineas 构建脚本')
     parser.add_argument('--no-minify', action='store_true', help='不压缩代码')
+    parser.add_argument('--aggressive', '-a', action='store_true', 
+                        help='激进压缩：混淆全局名称，体积更小但难以调试')
     args = parser.parse_args()
     
-    build(minify=not args.no_minify)
+    build(minify=not args.no_minify, aggressive=args.aggressive)
 
 
 if __name__ == "__main__":
