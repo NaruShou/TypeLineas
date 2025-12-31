@@ -60,6 +60,43 @@ class ComplexityVisitor(ast.NodeVisitor):
     def visit_BoolOp(self, node): 
         self.complexity += (len(node.values) - 1)
         self.generic_visit(node)
+    
+    # Python 3.10+ match/case 
+    def visit_Match(self, node):
+        # 每个 match 独立计算：≤3 case 基础 +1，>3 case 每个 +0.5
+        case_count = len(node.cases)
+        if case_count <= 3:
+            self.complexity += 1
+        else:
+            self.complexity += case_count * 0.5
+        self.generic_visit(node)
+    
+    # 三元表达式 x = a if b else c
+    def visit_IfExp(self, node):
+        self.complexity += 1
+        self.generic_visit(node)
+    
+    # 推导式：隐含循环和条件
+    def visit_ListComp(self, node):
+        # 每个 for 子句 +1，每个 if 过滤 +1
+        for generator in node.generators:
+            self.complexity += 1 + len(generator.ifs)
+        self.generic_visit(node)
+    
+    def visit_SetComp(self, node):
+        for generator in node.generators:
+            self.complexity += 1 + len(generator.ifs)
+        self.generic_visit(node)
+    
+    def visit_DictComp(self, node):
+        for generator in node.generators:
+            self.complexity += 1 + len(generator.ifs)
+        self.generic_visit(node)
+    
+    def visit_GeneratorExp(self, node):
+        for generator in node.generators:
+            self.complexity += 1 + len(generator.ifs)
+        self.generic_visit(node)
 
 
 def analyze_python_ast(file_path):
@@ -74,7 +111,7 @@ def analyze_python_ast(file_path):
         visitor.visit(tree)
         return {
             'success': True, 
-            'complexity': visitor.complexity, 
+            'complexity': int(visitor.complexity + 0.5),  # 向上取整
             'imports': visitor.imports, 
             'docstrings': visitor.docstrings
         }
