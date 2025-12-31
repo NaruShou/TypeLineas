@@ -80,7 +80,7 @@ Score    Coder  Comp.  Imp.   行数       文件路径
 ## 📦 Installation
 
 ```bash
-git clone https://github.com/yourname/TypeLineas.git
+git clone https://github.com/NaruShou/TypeLineas.git
 cd TypeLineas
 python -m src .  # 运行！
 ```
