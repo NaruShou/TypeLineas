@@ -33,31 +33,37 @@ CODE_SMELLS = {
         'threshold': 50,
     },
     'deep_nesting': {
-        'pattern': re.compile(r'^(\s{16,})\S', re.MULTILINE),  # 4级以上缩进
+        # Tab(4+) 或 Space(16+) 都算深嵌套，兼容不同缩进风格
+        'pattern': re.compile(r'^(?:\t{4,}|[ ]{16,})\S', re.MULTILINE),
         'name': '深度嵌套',
     },
     'magic_number': {
-        'pattern': re.compile(r'(?<!["\'\w])\b(?:(?!0\b|1\b|2\b|-1\b)\d{2,}|0x[0-9a-fA-F]{4,})\b(?!["\'])'),
+        # 排除常见的 -1,0,1,2 和字符串/变量中的数字
+        'pattern': re.compile(r'(?<!["\'\w])(?!-?[012]\b)-?\b\d{2,}(?:\.\d+)?(?!["\'\w])|0x[0-9a-fA-F]{4,}'),
         'name': '魔法数字',
         'suggestion': '提取为命名常量',
     },
     'long_param_list': {
-        'pattern': re.compile(r'def\s+\w+\s*\([^)]{80,}\)'),
+        # 多语言：Python def / JS function / Java/C# 方法
+        'pattern': re.compile(r'(?:def|function|func)\s+\w+\s*\([^)]{80,}\)|(?:public|private|protected)\s+\w+\s+\w+\s*\([^)]{80,}\)'),
         'name': '过长参数列表',
         'suggestion': '考虑使用数据类或字典封装',
     },
     'duplicate_string': {
-        'pattern': re.compile(r'(["\'][^"\']{10,}["\']).*?\1', re.DOTALL),
+        # 限制扫描范围到 2000 字符内防止回溯爆炸
+        'pattern': re.compile(r'(["\'][^"\']{10,}["\'])(?:.{0,2000}?)\1'),
         'name': '重复字符串',
         'suggestion': '提取为常量',
     },
     'print_debug': {
-        'pattern': re.compile(r'\bprint\s*\([^)]*debug|console\.log\s*\(', re.IGNORECASE),
+        # 多语言调试输出：print/console.log/System.out/fmt.Print/var_dump
+        'pattern': re.compile(r'\b(?:print|console\.log|System\.out\.print|fmt\.Print|var_dump|dd)\s*\(', re.IGNORECASE),
         'name': '调试代码残留',
         'suggestion': '移除或替换为正式日志',
     },
     'todo_fixme': {
-        'pattern': re.compile(r'#\s*(TODO|FIXME|XXX|HACK|BUG):', re.IGNORECASE),
+        # 多语言注释：# // /* 都支持
+        'pattern': re.compile(r'(?:#|//|/\*)\s*(TODO|FIXME|XXX|HACK|BUG)\b', re.IGNORECASE),
         'name': '未完成标记',
         'suggestion': '处理或创建 issue 跟踪',
     },
@@ -67,12 +73,14 @@ CODE_SMELLS = {
         'suggestion': '明确捕获特定异常类型',
     },
     'hardcoded_path': {
-        'pattern': re.compile(r'["\'][A-Za-z]:\\\\|["\']/(?:home|usr|var|etc)/'),
+        # Windows: C:\ 或 C:\\ / Unix: /home /usr /var /etc
+        'pattern': re.compile(r'["\'][A-Za-z]:\\|["\'][A-Za-z]:\\\\|[\'"]/(?:home|usr|var|etc|opt|tmp)/'),
         'name': '硬编码路径',
         'suggestion': '使用配置文件或环境变量',
     },
     'commented_code': {
-        'pattern': re.compile(r'#\s*(if|for|def|class|return|import)\s+\w+'),
+        # 多语言注释中的代码：# // /* 后跟关键字
+        'pattern': re.compile(r'(?:#|//)\s*(if|for|def|class|return|import|function|var|let|const)\s+\w+'),
         'name': '注释掉的代码',
         'suggestion': '删除或使用版本控制',
     },

@@ -2,9 +2,12 @@
 """
 TypeLineas 构建脚本
 将 src/ 下的模块合并为单文件 dist/TypeLineas.py
+支持代码压缩以减小分发体积
 """
 import os
 import re
+import sys
+import argparse
 from pathlib import Path
 
 # 按依赖顺序排列的模块文件
@@ -71,7 +74,32 @@ def clean_content(content):
     return content.strip()
 
 
-def build():
+def minify_code(code):
+    """
+    使用 python-minifier 压缩代码
+    构建时依赖，不影响分发文件
+    """
+    try:
+        import python_minifier
+        return python_minifier.minify(
+            code,
+            remove_annotations=True,
+            remove_pass=True,
+            remove_literal_statements=True,  # 移除独立的字符串（docstring）
+            combine_imports=True,
+            hoist_literals=False,  # 不提升字面量，保持可读性
+            rename_locals=True,
+            rename_globals=False,  # 保留全局名称以便调试
+            remove_object_base=True,
+            convert_posargs_to_args=True,
+        )
+    except ImportError:
+        print("  [WARN] python-minifier 未安装，跳过压缩")
+        print("         安装命令: pip install python-minifier")
+        return code
+
+
+def build(minify=True):
     """执行构建"""
     project_root = Path(__file__).parent
     dist_dir = project_root / 'dist'
@@ -79,6 +107,8 @@ def build():
     output_file = dist_dir / 'TypeLineas.py'
     
     print("Building TypeLineas...")
+    if minify:
+        print("  [INFO] 压缩模式已启用")
     
     parts = [STDLIB_IMPORTS]
     
@@ -106,12 +136,34 @@ def build():
     final_content = '\n'.join(parts)
     final_content = clean_content(final_content) + '\n'
     
+    # 记录压缩前大小
+    original_size = len(final_content.encode('utf-8'))
+    
+    # 压缩代码
+    if minify:
+        print("  Minifying...")
+        final_content = minify_code(final_content)
+    
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(final_content)
     
+    final_size = os.path.getsize(output_file)
     print(f"\nBuild complete: {output_file}")
-    print(f"Output size: {os.path.getsize(output_file)} bytes")
+    print(f"Output size: {final_size:,} bytes", end='')
+    if minify and original_size > final_size:
+        reduction = (1 - final_size / original_size) * 100
+        print(f" (压缩 {reduction:.1f}%)")
+    else:
+        print()
+
+
+def main():
+    parser = argparse.ArgumentParser(description='TypeLineas 构建脚本')
+    parser.add_argument('--no-minify', action='store_true', help='不压缩代码')
+    args = parser.parse_args()
+    
+    build(minify=not args.no_minify)
 
 
 if __name__ == "__main__":
-    build()
+    main()
