@@ -33,8 +33,8 @@ CODE_SMELLS = {
         'threshold': 50,
     },
     'deep_nesting': {
-        # Tab(4+) 或 Space(16+) 都算深嵌套，兼容不同缩进风格
-        'pattern': re.compile(r'^(?:\t{4,}|[ ]{16,})\S', re.MULTILINE),
+        # 5层+嵌套才报警（20空格/5Tab），避免正常代码误报
+        'pattern': re.compile(r'^(?:\t{5,}|[ ]{20,})\S', re.MULTILINE),
         'name': '深度嵌套',
     },
     'magic_number': {
@@ -356,6 +356,51 @@ def analyze_function_complexity(file_path, lang_name):
     return result
 
 
+def merge_line_ranges(line_nums):
+    """将连续行号合并为范围格式，如 [49, 50, 51, 55] -> ['49-51', '55']"""
+    if not line_nums:
+        return []
+    
+    sorted_nums = sorted(set(line_nums))
+    ranges = []
+    start = end = sorted_nums[0]
+    
+    for num in sorted_nums[1:]:
+        if num == end + 1:
+            end = num
+        else:
+            ranges.append(f"L{start}-{end}" if start != end else f"L{start}")
+            start = end = num
+    ranges.append(f"L{start}-{end}" if start != end else f"L{start}")
+    return ranges
+
+
+def find_function_for_line(line_num, func_ranges):
+    """根据行号查找所属函数名"""
+    for func_name, start, end in func_ranges:
+        if start <= line_num <= end:
+            return func_name
+    return None
+
+
+def get_function_ranges(content):
+    """获取文件中所有函数的行号范围"""
+    lines = content.split('\n')
+    func_pattern = re.compile(r'^(    )*def\s+(\w+)\s*\(', re.MULTILINE)
+    func_matches = list(func_pattern.finditer(content))
+    
+    ranges = []
+    for i, match in enumerate(func_matches):
+        func_name = match.group(2)
+        start_line = content[:match.start()].count('\n') + 1
+        if i + 1 < len(func_matches):
+            end_line = content[:func_matches[i+1].start()].count('\n')
+        else:
+            end_line = len(lines)
+        ranges.append((func_name, start_line, end_line))
+    return ranges
+
+
 def scan_code_smells(file_path):
     """
     启发式扫描代码异味
@@ -375,6 +420,9 @@ def scan_code_smells(file_path):
     
     smells = []
     
+    # 获取函数范围（用于深度嵌套的函数定位）
+    func_ranges = get_function_ranges(content)
+    
     # 检测各种代码异味
     for smell_key, smell_info in CODE_SMELLS.items():
         # 跳过标记了 skip 的项或没有 pattern 的项
@@ -384,20 +432,55 @@ def scan_code_smells(file_path):
         matches = list(pattern.finditer(content))
         
         if matches:
-            # 找到匹配的行号
-            line_nums = []
-            for match in matches[:5]:  # 最多记录5个位置
-                start = match.start()
-                line_num = content[:start].count('\n') + 1
-                line_nums.append(line_num)
-            
-            smells.append({
-                'key': smell_key,
-                'name': smell_info['name'],
-                'count': len(matches),
-                'lines': line_nums,
-                'suggestion': smell_info.get('suggestion', ''),
-            })
+            # 深度嵌套特殊处理：按函数分组并合并行号
+            if smell_key == 'deep_nesting':
+                all_line_nums = []
+                for match in matches:
+                    line_num = content[:match.start()].count('\n') + 1
+                    all_line_nums.append(line_num)
+                
+                # 按函数分组
+                func_groups = {}
+                global_lines = []
+                for ln in all_line_nums:
+                    func_name = find_function_for_line(ln, func_ranges)
+                    if func_name:
+                        func_groups.setdefault(func_name, []).append(ln)
+                    else:
+                        global_lines.append(ln)
+                
+                # 生成格式化的位置信息
+                formatted_lines = []
+                for func_name, func_lines in func_groups.items():
+                    ranges = merge_line_ranges(func_lines)
+                    formatted_lines.append(f"[{func_name}]{','.join(ranges[:2])}")
+                if global_lines:
+                    ranges = merge_line_ranges(global_lines)
+                    formatted_lines.append(f"[global]{','.join(ranges[:2])}")
+                
+                smells.append({
+                    'key': smell_key,
+                    'name': smell_info['name'],
+                    'count': len(matches),
+                    'lines': all_line_nums[:5],  # 保留原始行号用于兼容
+                    'formatted_lines': formatted_lines[:5],  # 新增格式化的位置
+                    'suggestion': smell_info.get('suggestion', ''),
+                })
+            else:
+                # 普通代码异味处理
+                line_nums = []
+                for match in matches[:5]:
+                    start = match.start()
+                    line_num = content[:start].count('\n') + 1
+                    line_nums.append(line_num)
+                
+                smells.append({
+                    'key': smell_key,
+                    'name': smell_info['name'],
+                    'count': len(matches),
+                    'lines': line_nums,
+                    'suggestion': smell_info.get('suggestion', ''),
+                })
     
     # 检测长行
     long_lines = [(i+1, len(line)) for i, line in enumerate(lines) if len(line) > THRESHOLDS['long_line']]
@@ -509,9 +592,15 @@ def generate_report(stats, include_smells=True):
         if smells:
             lines.append(f"\n  {Colors.PURPLE}▼ 代码异味检测:{Colors.ENDC}")
             for smell in smells[:3]:  # 最多显示3种异味
-                line_str = ', '.join(f'L{ln}' for ln in smell['lines'][:3])
-                if len(smell['lines']) > 3:
-                    line_str += '...'
+                # 优先使用 formatted_lines（深度嵌套专用）
+                if 'formatted_lines' in smell and smell['formatted_lines']:
+                    line_str = ', '.join(smell['formatted_lines'][:3])
+                    if len(smell['formatted_lines']) > 3:
+                        line_str += '...'
+                else:
+                    line_str = ', '.join(f'L{ln}' for ln in smell['lines'][:3])
+                    if len(smell['lines']) > 3:
+                        line_str += '...'
                 
                 detail = ''
                 if 'details' in smell:
