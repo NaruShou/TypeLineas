@@ -15,10 +15,21 @@ MODULE_ORDER = [
     'src/config/colors.py',
     'src/config/i18n.py',
     'src/config/constants.py',
+    'src/config/refactor_rules.py',
     'src/analyzers/python_ast.py',
+    'src/analyzers/pipeline/context.py',
+    'src/analyzers/pipeline/base_pipe.py',
+    'src/analyzers/pipeline/stages.py',
+    'src/analyzers/pipeline/runner.py',
     'src/analyzers/file_analyzer.py',
+    'src/analyzers/checkers/complexity_checker.py',
+    'src/analyzers/checkers/smell_scanner.py',
     'src/analyzers/refactor_advisor.py',
     'src/reporters/exporter.py',
+    'src/analyzers/project_scanner.py',
+    'src/reporters/console_reporter.py',
+    'src/utils/args_parser.py',
+    'src/utils/gitignore.py',
     'src/__main__.py',
 ]
 
@@ -31,18 +42,20 @@ import csv
 import locale
 import unicodedata
 from collections import defaultdict
+import fnmatch
 """
 
 # 匹配 src 内部 import 的模式（包括多行 from ... import (...)）
 INTERNAL_IMPORT_PATTERN = re.compile(
     r'^from src\.[\w.]+\s+import\s+\([\s\S]*?\)|'  # 多行 from src.xx import (...)
     r'^from src\.[\w.]+\s+import\s+[^(].*$|'       # 单行 from src.xx import xxx
+    r'^from \.[\w.]*\s+import\s+.*$|'              # 相对引用 from . import / from .xxx import
     r'^import src\..*$',                            # import src.xxx
     re.MULTILINE
 )
 
 # 匹配标准库 import
-STDLIB_PATTERN = re.compile(r'^(import (os|re|sys|ast|csv|locale|unicodedata)|from collections import).*$', re.MULTILINE)
+STDLIB_PATTERN = re.compile(r'^(import (os|re|sys|ast|csv|locale|unicodedata|fnmatch)|from collections import).*$', re.MULTILINE)
 
 
 def read_module(filepath):

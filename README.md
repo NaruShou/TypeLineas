@@ -6,7 +6,7 @@
 > 🔍 **代码质量分析工具** - 快速识别代码中的"屎山"(Shit Mountains)，提供多语言复杂度分析和重构建议。
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Languages-12+-green.svg" alt="Languages"/>
+  <img src="https://img.shields.io/badge/Languages-40+-green.svg" alt="Languages"/>
   <img src="https://img.shields.io/badge/AST-Powered-orange.svg" alt="AST"/>
   <img src="https://img.shields.io/badge/i18n-中文%2FEnglish-purple.svg" alt="i18n"/>
 </p>
@@ -15,7 +15,7 @@
 
 - 🏔️ **屎山检测** - 基于圈复杂度(CC)、嵌套深度、耦合度等指标识别问题代码
 - 🔥 **热点函数定位** - 精确到函数级别的复杂度分析，直接告诉你哪个函数最需要重构
-- 🧪 **12+ 语言支持** - Python, JavaScript, TypeScript, Java, C/C++, C#, PHP, Go, Rust, Kotlin, Lua...
+- 🧪 **40+ 语言支持** - Python, JavaScript, TypeScript, Java, C/C++, C#, PHP, Go, Rust, Kotlin, Swift, Scala, Dart, Ruby, SQL, Vue...
 - 🔧 **智能重构建议** - 启发式代码异味检测 + 针对性重构建议
 - 🌍 **中英双语** - 自动检测系统语言，终端和报告全本地化
 - 📊 **多格式报告** - Markdown / CSV 导出
