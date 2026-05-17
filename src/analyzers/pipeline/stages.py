@@ -4,7 +4,7 @@
 import re
 from src.config.constants import (
     LANG_DEFINITIONS, IMPORT_PATTERNS, CC_PATTERNS, LANG_FAMILY,
-    SCRIPT_START, SCRIPT_END, STRING_LITERAL
+    SCRIPT_START, SCRIPT_END, STRING_LITERAL, JAVA_BOILERPLATE_PATTERNS
 )
 from src.analyzers.python_ast import analyze_python_ast
 from .base_pipe import BasePipe
@@ -130,9 +130,46 @@ class ScannerStage(BasePipe):
                     indent = self._get_indentation_level(line)
                     if indent > context.stats['max_nesting']:
                         context.stats['max_nesting'] = indent
-                    regex = js_import_regex if (lang_name == 'HTML' and in_script) else import_regex
-                    if regex and regex.match(stripped):
-                        unique_imports.add(stripped)
+                # import 行统一在此匹配、计入耦合度
+                regex = js_import_regex if (lang_name == 'HTML' and in_script) else import_regex
+                if regex and regex.match(stripped):
+                    unique_imports.add(stripped)
+            
+            # Java 样板代码判定：package/import/getter/setter/注解等机械性行
+            # 这些行虽属逻辑语言但无实际业务逻辑，计为 boilerplate 而非 code
+            if lang_name == 'Java':
+                stripped_for_bp = line.strip()
+                # package 声明
+                if JAVA_BOILERPLATE_PATTERNS['package'].match(stripped_for_bp):
+                    context.stats['boilerplate'] += 1
+                    continue
+                # Lombok 注解（@Data @Getter 等自动生成样板）
+                if JAVA_BOILERPLATE_PATTERNS['lombok'].match(stripped_for_bp):
+                    context.stats['boilerplate'] += 1
+                    continue
+                # 标准 getter/setter 单行实现体
+                if (JAVA_BOILERPLATE_PATTERNS['getter'].match(stripped_for_bp) or
+                    JAVA_BOILERPLATE_PATTERNS['setter'].match(stripped_for_bp)):
+                    context.stats['boilerplate'] += 1
+                    continue
+                # 空方法体 / 默认桩 / serialVersionUID
+                if (JAVA_BOILERPLATE_PATTERNS['empty_method'].match(stripped_for_bp) or
+                    JAVA_BOILERPLATE_PATTERNS['serial_version'].match(stripped_for_bp) or
+                    JAVA_BOILERPLATE_PATTERNS['default_stub'].match(stripped_for_bp)):
+                    context.stats['boilerplate'] += 1
+                    continue
+                # @Override 等独立注解行
+                if JAVA_BOILERPLATE_PATTERNS['override_annotation'].match(stripped_for_bp):
+                    context.stats['boilerplate'] += 1
+                    continue
+                # import 行已计入 unique_imports，此处避免重复计为代码行
+                if import_regex and import_regex.match(stripped_for_bp):
+                    context.stats['boilerplate'] += 1
+                    continue
+                # 纯括号/分号行
+                if JAVA_BOILERPLATE_PATTERNS['bare_brace_semicolon'].match(stripped_for_bp):
+                    context.stats['boilerplate'] += 1
+                    continue
             
             if len(stripped) < 2 and stripped in '{}[]();,':
                 context.stats['boilerplate'] += 1
@@ -155,8 +192,10 @@ class ScannerStage(BasePipe):
         clean_line = self._sanitize_line(line, lang_name)
         matches = pattern.findall(clean_line)
         score = 0
+        # 0.5 权重：不独立增加控制流的附属关键字
+        half_weight = {'case', 'default', 'else', 'finally'}
         for match in matches:
-            if match in ['case', 'default', 'else']: score += 0.5
+            if match in half_weight: score += 0.5
             else: score += 1
         return score
 

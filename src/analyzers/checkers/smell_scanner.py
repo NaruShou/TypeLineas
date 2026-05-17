@@ -10,13 +10,14 @@ from src.analyzers.checkers.complexity_checker import ComplexityChecker
 class SmellScanner:
     """负责扫描代码异味"""
 
-    def scan(self, file_path, extractor=None):
+    def scan(self, file_path, extractor=None, lang_name=None):
         """
         启发式扫描代码异味
         
         Args:
             file_path: 文件路径
             extractor: 解析器正则组
+            lang_name: 语言名称（用于过滤语言专属异味）
             
         Returns:
             list: 检测到的代码异味列表 [(smell_name, count, line_samples)]
@@ -26,6 +27,8 @@ class SmellScanner:
         lang_def = LANG_DEFINITIONS.get(ext)
         if lang_def and not lang_def[4]:  # is_logic = False
             return []
+        if lang_name is None:
+            lang_name = lang_def[0] if lang_def else None
         
         try:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -40,7 +43,7 @@ class SmellScanner:
         func_ranges = self.get_function_ranges(content, lines, extractor)
         
         # 检测各种代码异味
-        smells.extend(self._check_pattern_smells(content, func_ranges))
+        smells.extend(self._check_pattern_smells(content, func_ranges, lang_name))
         
         # 检测长行
         smells.extend(self._check_long_lines(lines))
@@ -50,13 +53,19 @@ class SmellScanner:
         
         return smells
 
-    def _check_pattern_smells(self, content, func_ranges):
+    def _check_pattern_smells(self, content, func_ranges, lang_name=None):
         """检测基于模式的代码异味"""
         smells = []
         for smell_key, smell_info in CODE_SMELLS.items():
             # 跳过标记了 skip 的项或没有 pattern 的项
             if smell_info.get('skip') or not smell_info.get('pattern'):
                 continue
+            
+            # 语言过滤：如果异味指定了适用语言，仅对该语言生效
+            smell_langs = smell_info.get('languages')
+            if smell_langs and lang_name and lang_name not in smell_langs:
+                continue
+            
             pattern = smell_info['pattern']
             matches = list(pattern.finditer(content))
             

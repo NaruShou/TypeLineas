@@ -65,6 +65,7 @@ CODE_SMELLS = {
         'pattern': re.compile(r'\bexcept\s*:\s*$', re.MULTILINE),
         'name': '裸 except',
         'suggestion': '明确捕获特定异常类型',
+        'languages': ['Python'],
     },
     'hardcoded_path': {
         # Windows: C:\ 或 C:\\ / Unix: /home /usr /var /etc
@@ -77,6 +78,64 @@ CODE_SMELLS = {
         'pattern': re.compile(r'(?:#|//)\s*(if|for|def|class|return|import|function|var|let|const)\s+\w+'),
         'name': '注释掉的代码',
         'suggestion': '删除或使用版本控制',
+    },
+    # --- Java 专属代码异味 ---
+    'java_raw_type': {
+        # 原始类型使用（未指定泛型参数）：List list, HashMap map 等
+        'pattern': re.compile(
+            r'\b(List|Set|Map|ArrayList|HashMap|HashSet|LinkedList|TreeMap|TreeSet|Vector|Hashtable|'
+            r'Collection|Iterator|Comparable|Comparator|Optional|Stream|Supplier|Consumer|Function|'
+            r'BiFunction|Predicate|Callable|Future|CompletableFuture)\s+\w+\s*=',
+            re.MULTILINE
+        ),
+        'name': '原始类型 (泛型缺失)',
+        'suggestion': '添加泛型参数以提高类型安全，如 List<String>',
+        'languages': ['Java'],
+    },
+    'java_swallowed_exception': {
+        # 空 catch 块：catch(...) { } 无任何处理
+        'pattern': re.compile(r'catch\s*\([^)]*\)\s*\{\s*\}'),
+        'name': '异常吞没 (空 catch)',
+        'suggestion': '至少记录日志，避免静默吞没异常',
+        'languages': ['Java'],
+    },
+    'java_system_gc': {
+        # 显式调用垃圾回收
+        'pattern': re.compile(r'\bSystem\.gc\s*\(\s*\)'),
+        'name': '显式 GC 调用',
+        'suggestion': 'JVM 会自动管理内存，显式调用通常适得其反',
+        'languages': ['Java'],
+    },
+    'java_thread_deprecated': {
+        # 已废弃的线程方法
+        'pattern': re.compile(r'\bThread\s*\.\s*(?:stop|suspend|resume|countStackFrames|destroy)\s*\('),
+        'name': '废弃的线程 API',
+        'suggestion': '使用 interrupt() 或 java.util.concurrent 替代',
+        'languages': ['Java', 'Kotlin', 'Scala'],
+    },
+    'java_string_equals': {
+        # == 比较字符串（而非 .equals()）
+        'pattern': re.compile(r'(?:["\'][^"\']*["\']|\w+)\s*==\s*(?:["\'][^"\']*["\']|\w+)'),
+        'name': '疑似字符串 == 比较',
+        'suggestion': '使用 .equals() 替代 == 进行内容比较',
+        'languages': ['Java'],
+    },
+    'java_public_field': {
+        # 非 final 的 public 字段（违反封装）
+        'pattern': re.compile(
+            r'^\s*public\s+(?!static\s+final|final\s+static|final)\w+(?:<[^>]*>)?\s+\w+\s*;',
+            re.MULTILINE
+        ),
+        'name': 'public 可变字段',
+        'suggestion': '改为 private 并提供 getter/setter，保持封装',
+        'languages': ['Java'],
+    },
+    'java_exec_injection': {
+        # Runtime.exec() 潜在命令注入
+        'pattern': re.compile(r'\bRuntime\s*\.\s*getRuntime\s*\(\s*\)\s*\.\s*exec\s*\('),
+        'name': 'Runtime.exec() 调用',
+        'suggestion': '考虑使用 ProcessBuilder 并校验参数，防止命令注入',
+        'languages': ['Java'],
     },
 }
 
@@ -99,8 +158,38 @@ LANG_EXTRACTORS = {
         'indent_based': False,
     },
     'Java': {
-        'function': re.compile(r'(?:public|private|protected|static|\s)+\s+\w+(?:<[^>]*>)?\s+(?P<name>\w+)\s*\([^)]*\)\s*(?:throws\s+[\w,\s]+)?\s*\{', re.MULTILINE),
-        'class': re.compile(r'(?:public|private|protected)?\s*(?:abstract)?\s*class\s+(\w+)', re.MULTILINE),
+        # 匹配方法声明：注解 + 修饰符 + [泛型参数] + 返回类型 + 方法名(参数) [throws] {
+        #
+        # 正则拆解:
+        #   (@\w+...)         零到多个前置注解（支持 @Override, @GetMapping 等）
+        #   (?:public|...)    访问修饰符（至少一个，防止误配字段声明）
+        #   (final|...)?      可选额外修饰符
+        #   (?:<[^<>]*>)?     泛型类型参数 <T>
+        #   (?:[\w.]+...)?    返回类型（含泛型，嵌套用字符类宽松匹配；构造函数无返回类型则跳过）
+        #   (?P<name>\w+)     方法名/构造函数名
+        #   \([^)]*\)          参数列表
+        #   (?:throws...)?    throws 子句
+        #   \{                方法体开始
+        'function': re.compile(
+            r'(?:@\w+(?:\s*\([^)]*\))?[\s\n]*)*'
+            r'(?:public|private|protected|static|final|synchronized|native|abstract|strictfp)+\s+'
+            r'(?:final\s+|synchronized\s+|native\s+|static\s+|abstract\s+|strictfp\s+)*'
+            r'(?:<\s*[\w\s,.?<>\[\]]*\s*>\s+)?'
+            r'(?:[\w.]+(?:<[\w\s,.?<>\[\]]*>)?(?:\s*\[\])*\s+)?'
+            r'(?P<name>\w+)\s*'
+            r'\([^)]*\)'
+            r'(?:\s*throws\s+[\w\s,.]+)?'
+            r'\s*\{',
+            re.MULTILINE
+        ),
+        # 匹配类/接口/枚举/记录/注解声明
+        'class': re.compile(
+            r'(?:public|private|protected)?\s*'
+            r'(?:abstract|static|final|strictfp)?\s*'
+            r'(?:class|interface|@interface|enum|record)\s+'
+            r'(\w+)',
+            re.MULTILINE
+        ),
         'indent_based': False,
     },
     'C': {

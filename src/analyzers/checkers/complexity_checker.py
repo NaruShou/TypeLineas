@@ -76,22 +76,58 @@ class ComplexityChecker:
                         return j
             return min(start_line + 100, len(lines))
         
-        # 大括号语言处理
+        # 大括号语言处理（含 Java C/C++ C# Go Rust Kotlin Swift 等）
         scan_end = next_match_start if next_match_start else len(content)
         brace_count = 0
         in_string = False
         string_char = None
         escaped = False
+        in_line_comment = False   # 单行注释 //
+        in_block_comment = False   # 多行注释 /* */
         
         for char_idx in range(match.start(), scan_end):
+            if char_idx >= len(content):
+                break
             char = content[char_idx]
+            next_char = content[char_idx + 1] if char_idx + 1 < len(content) else ''
+            
+            # 字符串转义处理
             if escaped:
                 escaped = False
                 continue
-            if char == '\\':
+            if char == '\\' and (in_string or in_line_comment or in_block_comment):
+                # 仅在字符串/注释中处理转义
+                pass
+            elif char == '\\' and in_string:
                 escaped = True
                 continue
-            if char in '"\'':
+            
+            # 注释结束检测（先于其他处理，确保 /* */ 内的一切被忽略）
+            if in_block_comment:
+                if char == '*' and next_char == '/':
+                    in_block_comment = False
+                    # 跳过 '/' 字符，下一轮循环处理
+                    continue
+                continue
+            
+            # 单行注释行尾重置（由外层的换行遍历保证，此处防止 \n 处继续）
+            if in_line_comment and char == '\n':
+                in_line_comment = False
+                continue
+            if in_line_comment:
+                continue
+            
+            # 注释开始检测
+            if not in_string:
+                if char == '/' and next_char == '/':
+                    in_line_comment = True
+                    continue
+                if char == '/' and next_char == '*':
+                    in_block_comment = True
+                    continue
+            
+            # 字符串字面量检测
+            if char in '"\'' and not in_line_comment and not in_block_comment:
                 if not in_string:
                     in_string = True
                     string_char = char
@@ -102,6 +138,7 @@ class ComplexityChecker:
             if in_string:
                 continue
             
+            # 花括号计数
             if char == '{':
                 brace_count += 1
             elif char == '}':

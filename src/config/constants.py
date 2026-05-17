@@ -109,6 +109,10 @@ IMPORT_PATTERNS = {
 # 圈复杂度关键字匹配
 CC_PATTERNS = {
     'C-Family': re.compile(r'\b(if|else|for|while|switch|case|catch|try)\b|&&|\|\|'),
+    'Java': re.compile(
+        r'\b(if|else|for|while|switch|case|catch|try|throw|do|instanceof|finally)\b'
+        r'|&&|\|\|'
+    ),
     'Go': re.compile(r'\b(if|else|for|select|case|default)\b|&&|\|\|'),
     'Rust': re.compile(r'\b(if|else|for|while|loop|match|None|Some|Err|Ok)\b|&&|\|\|'),
     'Lua': re.compile(r'\b(if|else|elseif|for|while|repeat)\b|\band\b|\bor\b'),
@@ -121,7 +125,7 @@ CC_PATTERNS = {
 # 语言到语言家族的映射（用于复杂度计算）
 LANG_FAMILY = {
     'JavaScript': 'C-Family', 'TypeScript': 'C-Family', 'React': 'C-Family', 'React TS': 'C-Family',
-    'Java': 'C-Family', 'C': 'C-Family', 'C++': 'C-Family', 'C#': 'C-Family', 'PHP': 'C-Family',
+    'Java': 'Java', 'C': 'C-Family', 'C++': 'C-Family', 'C#': 'C-Family', 'PHP': 'C-Family',
     'Kotlin': 'C-Family', 'Kotlin Script': 'C-Family', 'Objective-C': 'C-Family', 'Objective-C++': 'C-Family',
     'Scala': 'C-Family', 'Dart': 'C-Family', 'Vue': 'C-Family', 'Svelte': 'C-Family',
     'Go': 'Go', 'Rust': 'Rust', 'Lua': 'Lua',
@@ -152,3 +156,25 @@ DEFAULT_IGNORES = {'.git', 'node_modules', 'venv', '.venv', '__pycache__', 'dist
 
 # 豁免文件：这些是常见的包聚合文件，即使复杂度高也不标记
 EXEMPT_FILES = {'__init__.py', 'index.js', 'index.ts', 'mod.rs', 'package.go', 'Package.swift', 'Cargo.toml', 'pubspec.yaml', 'package.json'}
+
+# Java 样板代码识别模式（用于准确区分逻辑代码和机械代码）
+JAVA_BOILERPLATE_PATTERNS = {
+    # package 声明
+    'package': re.compile(r'^\s*package\s+[\w.]+;'),
+    # Lombok 注解（标记属性的常见场景，生成 getter/setter/constructor 等）
+    'lombok': re.compile(r'^\s*@(Data|Getter|Setter|Builder|ToString|EqualsAndHashCode|NoArgsConstructor|AllArgsConstructor|RequiredArgsConstructor|Value|Slf4j|Log4j2|Log)\b'),
+    # 标准 getter 单行体: return this.field;
+    'getter': re.compile(r'^\s*public\s+\w+(?:<[^>]*>)?\s+(?:is|get)\w+\s*\(\s*\)\s*\{\s*return\s+(?:this\.)?\w+;\s*\}\s*$'),
+    # 标准 setter 单行体: this.field = field;
+    'setter': re.compile(r'^\s*public\s+void\s+set\w+\s*\(\s*\w+(?:<[^>]*>)?\s+\w+\s*\)\s*\{\s*this\.\w+\s*=\s*\w+;\s*\}\s*$'),
+    # 空方法体 / 占位实现
+    'empty_method': re.compile(r'^\s*(?:public|private|protected)?\s*(?:static|final|synchronized|abstract)?\s*(?:\w+(?:<[^>]*>)?\s+)?\w+\s*\([^)]*\)\s*\{\s*\}'),
+    # 接口默认方法桩（default void foo() {} 且方法体空）
+    'default_stub': re.compile(r'^\s*default\s+\w+(?:<[^>]*>)?\s+\w+\s*\([^)]*\)\s*\{\s*\}'),
+    # @Override 仅注解行
+    'override_annotation': re.compile(r'^\s*@Override\s*$'),
+    # 序列化版本 ID
+    'serial_version': re.compile(r'^\s*(?:private|public|protected)?\s*static\s+final\s+long\s+serialVersionUID\s*='),
+    # 纯括号行（大括号/分号单独一行）
+    'bare_brace_semicolon': re.compile(r'^\s*[{};]\s*$'),
+}

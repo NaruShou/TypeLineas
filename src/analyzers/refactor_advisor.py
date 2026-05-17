@@ -64,7 +64,7 @@ def scan_code_smells(file_path, lang_name='Python'):
             if key in lang_name or lang_name in ['React', 'React TS']:
                 extractor = LANG_EXTRACTORS.get('JavaScript' if 'React' in lang_name else key)
                 break
-    return SmellScanner().scan(file_path, extractor)
+    return SmellScanner().scan(file_path, extractor, lang_name)
 
 
 def diagnose_file(stats):
